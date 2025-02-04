@@ -3,29 +3,23 @@ import requests
 
 from app import *
 
-# @app.route("/", methods=["GET", "POST"])
-# def homePage():
-#     if request.method == "POST":
-#         return render_template("profile.html", username=request.form.get("username"))
-#     else:
-#         return render_template("index.html")
-    
+# rota padrão
 @app.route("/")
 def home():
     return render_template("index.html")
 
-# Redireciona para o GitHub para autenticação
+# rota para eedirecionar para autenticação do github
 @app.route("/login")
 def login():
     github_auth_url = f"https://github.com/login/oauth/authorize?client_id={GITHUB_CLIENT_ID}&scope=user repo"
     return redirect(github_auth_url)
 
-# Callback do GitHub (onde receberemos o token)
+# rota para callback do github
 @app.route("/callback")
 def callback():
     code = request.args.get("code")
     if not code:
-        return render_template("callback.html", error="Erro ao autenticar!")
+        return render_template("error.html", error="Erro ao autenticar!")
 
     # Troca o código pelo token de acesso
     token_url = "https://github.com/login/oauth/access_token"
@@ -39,23 +33,50 @@ def callback():
     token_json = token_response.json()
 
     if "access_token" not in token_json:
-        return render_template("callback.html", error="Erro ao obter token!")
+        return render_template("error.html", error="Erro ao obter token!")
 
     session["github_token"] = token_json["access_token"]
-    return redirect(url_for("profile"))
+    return redirect(url_for("search"))
 
-# Pega informações do usuário autenticado
-@app.route("/profile")
-def profile():
+# rota para pesquisar por usario
+@app.route("/search", methods=["GET", "POST"])
+def search():
     token = session.get("github_token")
     if not token:
         return redirect(url_for("login"))
 
     headers = {"Authorization": f"token {token}"}
-    user_response = requests.get("https://api.github.com/user", headers=headers)
-    user_data = user_response.json()
 
-    return jsonify(user_data)  # Retorna os dados do usuário como JSON
+    if request.method == "POST":
+        username = request.form.get("username")
+        if not username:
+            return render_template("error.html", error="Digite um nome de usuário!")
+
+        # buscar dados do usuário
+        user_response = requests.get(f"https://api.github.com/users/{username}", headers=headers)
+        if user_response.status_code != 200:
+            return render_template("error.html", error="Usuário não encontrado!")
+
+        user_data = user_response.json()
+
+        # buscar repositórios do usuário
+        repos_response = requests.get(f"https://api.github.com/users/{username}/repos", headers=headers)
+        if repos_response.status_code != 200:
+            return render_template("error.html", error="Não foi possível obter os repositórios!")
+
+        repos_data = repos_response.json()
+
+        # buscar linguagens dos repositórios
+        for repo in repos_data:
+            lang_response = requests.get(f"https://api.github.com/repos/{username}/{repo['name']}/languages", headers=headers)
+            if lang_response.status_code == 200:
+                repo["languages"] = list(lang_response.json().keys())  # Lista de linguagens
+            else:
+                repo["languages"] = []
+
+        return render_template("results.html", user=user_data, repos=repos_data)
+
+    return render_template("search.html")
 
 # Logout
 @app.route("/logout")
