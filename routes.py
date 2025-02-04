@@ -2,6 +2,7 @@ from flask import render_template, request, redirect, request, session, url_for,
 import requests
 
 from app import *
+import api
 
 # rota padrão
 @app.route("/")
@@ -43,9 +44,7 @@ def callback():
 def search():
     token = session.get("github_token")
     if not token:
-        return redirect(url_for("login"))
-
-    headers = {"Authorization": f"token {token}"}
+        return redirect(url_for("home"))
 
     if request.method == "POST":
         username = request.form.get("username")
@@ -53,32 +52,31 @@ def search():
             return render_template("error.html", error="Digite um nome de usuário!")
 
         # buscar dados do usuário
-        user_response = requests.get(f"https://api.github.com/users/{username}", headers=headers)
-        if user_response.status_code != 200:
+        user_data = api.get_user_data(username, token)
+        if not user_data:
             return render_template("error.html", error="Usuário não encontrado!")
 
-        user_data = user_response.json()
+        # buscar repositórios do usuário (se não houver, retorna lista vazia)
+        repos_data = api.get_repos(username, token)
 
-        # buscar repositórios do usuário
-        repos_response = requests.get(f"https://api.github.com/users/{username}/repos", headers=headers)
-        if repos_response.status_code != 200:
-            return render_template("error.html", error="Não foi possível obter os repositórios!")
+        # verifica se o usuário tem repositórios
+        if not repos_data:
+            return render_template("results.html", user=user_data, repos=[], total_commits=0)
 
-        repos_data = repos_response.json()
-
-        # buscar linguagens dos repositórios
+        # adicionar linguagens e commits a cada repositório
         for repo in repos_data:
-            lang_response = requests.get(f"https://api.github.com/repos/{username}/{repo['name']}/languages", headers=headers)
-            if lang_response.status_code == 200:
-                repo["languages"] = list(lang_response.json().keys())  # Lista de linguagens
-            else:
-                repo["languages"] = []
+            repo["languages"] = api.get_repo_languages(username, repo["name"], token)
+            repo["commits_count"] = api.get_total_commits(username, repo["name"], token)
 
-        return render_template("results.html", user=user_data, repos=repos_data)
+        # calcular total de commits do usuário
+        total_commits = api.get_user_total_commits(username, token)
+
+        return render_template("results.html", user=user_data, repos=repos_data, total_commits=total_commits)
 
     return render_template("search.html")
 
-# Logout
+
+# logout
 @app.route("/logout")
 def logout():
     session.pop("github_token", None)
