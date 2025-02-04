@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <!-- Content -->
+    <div class="container mt-5">
+        <div class="row text-center">
+            {% if error %}
+                <h2 class="text-danger">{{ error }}</h2>
+            {% else %}
+                <h2 class="text-success">Autenticação bem-sucedida! Redirecionando...</h2>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

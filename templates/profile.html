@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    <!-- Content -->
+    <div class="container mt-5">
+        <div class="row">
+            <h1>
+                {% if username %}
+                    {{ username }}
+                {% else %}
+                    <span class="text-danger text-center">Usuário não encontrado!</span>
+                {% endif %}
+            </h1>
+        </div>
+    </div>
+{% endblock %}
